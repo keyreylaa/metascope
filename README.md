@@ -50,6 +50,29 @@ metascope strip photo.jpg --mode privacy --verify
 metascope scan ./photos --out ./scan-out
 ```
 
+## Batch strip (mass metadata removal)
+
+The `batch strip` command processes many files in parallel, respecting the same safety rules as the single‑file `strip` command.
+
+```sh
+# Strip all supported files in a directory tree, write cleaned copies to ./out/
+metascope batch strip ./photos --out ./out
+
+# Strip in‑place (original files are overwritten, .metascope.bak backups created)
+metascope batch strip ./photos --in-place
+
+# Keep ICC profile and orientation (useful for printing workflows)
+metascope batch strip ./photos --out ./out --keep icc --keep orientation
+
+# Run with 12 parallel workers and bundle results into a ZIP archive
+metascope batch strip ./photos --out ./out --concurrency 12 --zip
+
+# See what would happen without touching any files
+metascope batch strip ./photos --out ./out --dry-run
+```
+
+
+
 ## Safety rules
 
 - Originals are never touched by default. Edit/strip commands write copies
@@ -61,6 +84,8 @@ metascope scan ./photos --out ./scan-out
 - `strip --verify` re-reads the output and lists every residual tag. The word
   "clean" is printed only when the re-read proves it.
 - Stripping metadata does NOT remove invisible pixel watermarks (e.g. SynthID).
+- The `clean` command is equivalent to `strip --mode all --verify` and follows
+   the same safety rules.
 
 ## Commands
 
