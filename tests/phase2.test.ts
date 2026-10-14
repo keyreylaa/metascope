@@ -4,13 +4,14 @@ import { applyCopyright } from "../src/core/copyright.js";
 import { setDates, shiftDates } from "../src/core/dates.js";
 import { closeExifTool } from "../src/core/exiftool.js";
 import { prepareOutput } from "../src/core/fileOps.js";
-import { parseLatLon, removeGps, setGps } from "../src/core/gps.js";
+import { parseLatLon, removeGps, setGps, showLocation } from "../src/core/gps.js";
+import { collectLocationEntries } from "../src/core/location.js";
 import { readFileGrouped } from "../src/core/reader.js";
 import { loadSharp } from "../src/core/sharpLoader.js";
 import { diffTargets, restoreSnapshot, saveSnapshot } from "../src/core/snapshot.js";
-import { collectResiduals, stripFile } from "../src/core/strip.js";
+import { assertCleanConfirmed, collectResiduals, stripFile } from "../src/core/strip.js";
 import { applyTags, parseSetPairs } from "../src/core/write.js";
-import { ensureLoadedFixtures } from "./fixtures.js";
+import { ensureLoadedFixtures, ensureLocationFixtures } from "./fixtures.js";
 
 afterAll(async () => {
   await closeExifTool();
@@ -89,6 +90,43 @@ describe("gps", () => {
     expect(() => parseLatLon("100,0")).toThrow();
     expect(() => parseLatLon("0,200")).toThrow();
     expect(() => parseLatLon("bogus")).toThrow();
+  });
+
+  it("detects EXIF+XMP+IPTC location and --show prints decimal plus map link", async () => {
+    const fixtures = await ensureLocationFixtures();
+    const read = await readFileGrouped(fixtures.located, false);
+    const tags = collectLocationEntries(read.groups).map((entry) => entry.tag);
+    expect(tags.some((tag) => tag === "GPS:GPSLatitude")).toBe(true);
+    expect(tags.some((tag) => /LocationShownCity|City/i.test(tag))).toBe(true);
+    const shown = await showLocation(fixtures.located);
+    expect(shown.lat).toBeCloseTo(-6.2, 4);
+    expect(shown.lon).toBeCloseTo(106.8, 4);
+    expect(shown.mapsLink).toContain("google.com/maps");
+    expect(shown.mapsLink).toContain("-6.2,106.8");
+  });
+
+  it("gps --remove and clean leave zero location fields", async () => {
+    const fixtures = await ensureLocationFixtures();
+    const target = await prepareOutput(fixtures.located, `${fixtures.dir}-out`);
+    const removed = await removeGps(target.output);
+    expect(removed.residual).toHaveLength(0);
+    expect(removed.removed.length).toBeGreaterThan(0);
+    const cleaned = await stripFile(target.output, { mode: "all", verify: true, yes: true });
+    const reread = await readFileGrouped(cleaned.output, false);
+    expect(collectLocationEntries(reread.groups)).toHaveLength(0);
+  });
+
+  it("clean confirmation refuses provenance without --yes", () => {
+    const read = {
+      file: "probe",
+      groups: { JUMBF: { JUMDLabel: "c2pa" } },
+      pngChunks: [],
+      isPng: false,
+      errors: [],
+      warnings: [],
+    };
+    expect(() => assertCleanConfirmed(read, false)).toThrow(/--yes/);
+    expect(() => assertCleanConfirmed(read, true)).not.toThrow();
   });
 });
 

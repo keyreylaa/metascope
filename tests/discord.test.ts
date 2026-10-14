@@ -4,7 +4,14 @@ import { join } from "node:path";
 import { afterAll, describe, expect, it } from "vitest";
 import { loadDotEnv } from "../src/discord/dotenv.js";
 import { channelSummary } from "../src/discord/redact.js";
-import { runAi, runHash, runScan } from "../src/discord/runner.js";
+import {
+  runAi,
+  runClean,
+  runGpsRemove,
+  runHash,
+  runPrivacy,
+  runScan,
+} from "../src/discord/runner.js";
 import {
   isAllowed,
   isAllowedHost,
@@ -13,7 +20,7 @@ import {
   resolveMaxFileBytes,
 } from "../src/discord/security.js";
 import { closeExifTool } from "../src/core/exiftool.js";
-import { ensurePhase3Fixtures, testTmp } from "./fixtures.js";
+import { ensureLocationFixtures, ensurePhase3Fixtures, testTmp } from "./fixtures.js";
 
 afterAll(async () => {
   await closeExifTool();
@@ -97,6 +104,28 @@ describe("runner on buffers", () => {
     const ai = await runAi(buffer, "a1111.png");
     expect(ai.channelText).toContain("confirmed_by_metadata");
     expect(ai.dmText).toMatch(/SynthID/);
+  });
+
+  it("runs privacy, clean, and gps-remove with redacted channel text", async () => {
+    const fixtures = await ensureLocationFixtures(testTmp("discord-location"));
+    const buffer = await readFile(fixtures.located);
+    const privacy = await runPrivacy(buffer, "located.jpg");
+    expect(privacy.channelText).toContain("critical/gps");
+    expect(privacy.channelText).not.toContain("-6.2");
+    expect(privacy.dmText).toContain("GPSLatitude");
+    const cleaned = await runClean(buffer, "located.jpg", true);
+    expect(cleaned.channelText).toContain("verified clean");
+    expect(cleaned.files).toHaveLength(1);
+    const gps = await runGpsRemove(buffer, "located.jpg");
+    expect(gps.channelText).toContain("no location fields remain");
+  });
+
+  it("runClean refuses provenance removal without confirmation", async () => {
+    const fixtures = await ensurePhase3Fixtures(testTmp("discord-provenance"));
+    const buffer = await readFile(fixtures.aiXmp);
+    await expect(runClean(buffer, "ai-xmp.jpg", false)).rejects.toThrow(/Confirm/);
+    const cleaned = await runClean(buffer, "ai-xmp.jpg", true);
+    expect(cleaned.channelText).toContain("Cleaned ai-xmp.jpg");
   });
 });
 

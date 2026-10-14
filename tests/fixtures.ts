@@ -177,6 +177,48 @@ export interface Phase3Fixtures {
   fakeJpg: string;
 }
 
+export interface LocationFixtures {
+  dir: string;
+  located: string;
+}
+
+export async function ensureLocationFixtures(dir?: string): Promise<LocationFixtures> {
+  const outDir = resolve(dir ?? testTmp("location"));
+  await rm(outDir, { recursive: true, force: true });
+  await mkdir(outDir, { recursive: true });
+
+  const { sharp, message } = await loadSharp();
+  if (!sharp) {
+    throw new Error(`Cannot generate fixtures: ${message}`);
+  }
+  const located = join(outDir, "located.jpg");
+  await sharp({
+    create: { width: 32, height: 32, channels: 3, background: { r: 10, g: 120, b: 60 } },
+  })
+    .jpeg({ quality: 90 })
+    .toFile(located);
+
+  const exiftool = await getExifTool();
+  await exiftool.write(located, { GPSLatitude: -6.2, GPSLongitude: 106.8 });
+  // Prefixed writes land in their own groups (proven live, zero warnings).
+  await exiftool.write(located, {
+    "XMP:GPSLatitude": -6.2,
+    "XMP:GPSLongitude": 106.8,
+    "XMP:LocationShownCity": "Jakarta",
+    "IPTC:City": "Jakarta",
+    "IPTC:Province-State": "DKI Jakarta",
+    "IPTC:Country-PrimaryLocationName": "Indonesia",
+  } as unknown as { Artist: string });
+
+  const { readdir, unlink } = await import("node:fs/promises");
+  for (const entry of await readdir(outDir)) {
+    if (entry.endsWith("_original")) {
+      await unlink(join(outDir, entry));
+    }
+  }
+  return { dir: outDir, located };
+}
+
 export const A1111_PARAMETERS = [
   "a cat sitting on a mat, highly detailed",
   "Negative prompt: blurry, watermark, text",

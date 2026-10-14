@@ -1,19 +1,27 @@
+import { randomBytes } from "node:crypto";
+import { utimes } from "node:fs/promises";
+import { extname } from "node:path";
 import type { Command } from "commander";
 import { effectiveOutDir, getConfig } from "./common.js";
 import { prepareOutput } from "../core/fileOps.js";
 import { resolveInputs } from "../core/inputs.js";
-import { stripFile } from "../core/strip.js";
+import { stripFile, CLEAN_NOTICE, assertCleanConfirmed } from "../core/strip.js";
+import { readFileGrouped } from "../core/reader.js";
 import { zipFiles } from "../core/zip.js";
 
 function collect(value: string, previous: string[]): string[] {
   return [...previous, value];
 }
 
+function randomName(source: string): string {
+  return `clean-${randomBytes(8).toString("hex")}${extname(source).toLowerCase()}`;
+}
+
 export function registerCleanCommand(program: Command): void {
   program
     .command("clean")
     .description(
-      "Strip ALL metadata with verification (alias-friendly: clean = strip all + verify)",
+      "Maximum-privacy strip: EXIF/IPTC/XMP/MakerNotes/thumbnails/JUMBF-C2PA/ICC removed, verified clean",
     )
     .argument("<inputs...>", "files or globs")
     .option(
@@ -22,14 +30,25 @@ export function registerCleanCommand(program: Command): void {
       collect,
       [] as string[],
     )
-    .option("--yes", "skip the C2PA/AI removal warning", false)
+    .option("--yes", "required when the file carries C2PA/AI provenance", false)
+    .option(
+      "--rename <mode>",
+      "random: output filename is a random id, not derived from the original",
+    )
     .option("--zip", "bundle outputs into one zip archive", false)
     .option("--out <dir>", "output directory")
     .option("--in-place", "modify originals (creates .metascope.bak per file)", false)
     .action(
       async (
         inputs: string[],
-        options: { keep: string[]; yes: boolean; zip: boolean; out?: string; inPlace: boolean },
+        options: {
+          keep: string[];
+          yes: boolean;
+          rename?: string;
+          zip: boolean;
+          out?: string;
+          inPlace: boolean;
+        },
       ) => {
         const files = await resolveInputs(inputs);
         if (files.length === 0) {
@@ -37,12 +56,36 @@ export function registerCleanCommand(program: Command): void {
           process.exitCode = 1;
           return;
         }
+        const renameRandom = options.rename?.toLowerCase() === "random";
+        if (options.rename && !renameRandom) {
+          console.error('Invalid --rename: only "random" is supported.');
+          process.exitCode = 1;
+          return;
+        }
+        if (renameRandom && options.inPlace === true) {
+          console.error("--rename random cannot be combined with --in-place.");
+          process.exitCode = 1;
+          return;
+        }
+        const outDir = effectiveOutDir(options.out, await getConfig());
         const outputs: string[] = [];
         for (const file of files) {
+          const before = await readFileGrouped(file, false);
+          try {
+            assertCleanConfirmed(before, options.yes === true);
+          } catch (error) {
+            console.error(error instanceof Error ? error.message : String(error));
+            process.exitCode = 1;
+            return;
+          }
+          const { join } = await import("node:path");
+          const outFile = renameRandom
+            ? join(outDir ?? process.cwd(), randomName(file))
+            : undefined;
           const target = await prepareOutput(
             file,
-            effectiveOutDir(options.out, await getConfig()),
-            undefined,
+            outDir,
+            outFile,
             options.inPlace === true,
             "_clean",
           );
@@ -53,14 +96,17 @@ export function registerCleanCommand(program: Command): void {
             mode: "all",
             keep: options.keep ?? [],
             verify: true,
-            yes: options.yes === true,
+            yes: true,
           });
+          const now = new Date();
+          await utimes(target.output, now, now);
           for (const warning of result.warnings) {
             console.error(warning);
           }
           for (const note of result.notes) {
             console.log(note);
           }
+          console.log(CLEAN_NOTICE);
           console.log(`Cleaned -> ${result.output}`);
           outputs.push(result.output);
           if (result.residuals.length === 0) {
@@ -74,9 +120,9 @@ export function registerCleanCommand(program: Command): void {
         }
         if (options.zip === true && outputs.length > 0) {
           const { join } = await import("node:path");
-          const outDir = effectiveOutDir(options.out, await getConfig()) ?? process.cwd();
+          const zipDir = outDir ?? process.cwd();
           const zipPath = join(
-            outDir,
+            zipDir,
             `metascope-clean-${new Date().toISOString().replace(/[:.]/g, "-")}.zip`,
           );
           await zipFiles(outputs, zipPath);

@@ -1,5 +1,6 @@
 import { getExifTool } from "./exiftool.js";
 import { loadSharp } from "./sharpLoader.js";
+import { LOCATION_REMOVE_TAGS } from "./location.js";
 import { readFileGrouped, type GroupedRead } from "./reader.js";
 import { applyTags } from "./write.js";
 
@@ -24,6 +25,9 @@ export interface StripResult {
 
 export const SYNTHID_NOTE =
   "Note: stripping metadata does NOT remove invisible pixel watermarks (e.g. SynthID).";
+
+export const CLEAN_NOTICE =
+  "Metadata dibersihkan. Watermark tak kasat mata di dalam pixel (mis. SynthID) dan watermark visual TIDAK dihapus dan di luar scope tool ini.";
 
 const KEEP_MAP: Record<string, string> = {
   icc: "ICC_Profile",
@@ -63,17 +67,19 @@ const PRIVACY_TAGS: Record<string, null> = {
   PreviewImage: null,
 };
 
-const GPS_TAGS: Record<string, null> = {
-  GPSLatitude: null,
-  GPSLongitude: null,
-  GPSAltitude: null,
-  GPSDateStamp: null,
-  GPSTimeStamp: null,
-  GPSProcessingMethod: null,
-  GPSPosition: null,
-};
+const GPS_TAGS: Record<string, null> = { ...LOCATION_REMOVE_TAGS, GPSPosition: null };
 
-const SENSITIVE_GROUPS = ["exif", "iptc", "xmp", "gps", "makernotes", "photoshop", "jumbf", "c2pa"];
+const SENSITIVE_GROUPS = [
+  "exif",
+  "iptc",
+  "xmp",
+  "gps",
+  "makernotes",
+  "photoshop",
+  "jumbf",
+  "c2pa",
+  "icc_profile",
+];
 
 export function detectProvenance(read: GroupedRead): string[] {
   const hits: string[] = [];
@@ -89,6 +95,19 @@ export function detectProvenance(read: GroupedRead): string[] {
     }
   }
   return hits;
+}
+
+export function assertCleanConfirmed(read: GroupedRead, yes: boolean): void {
+  if (yes === true) {
+    return;
+  }
+  const provenance = detectProvenance(read);
+  if (provenance.length > 0) {
+    throw new Error(
+      `Refusing to remove C2PA/AI provenance (${provenance.slice(0, 5).join(", ")}). ` +
+        `This cannot be undone. Re-run with --yes to confirm.`,
+    );
+  }
 }
 
 function mapKeep(keep: string[] | undefined): string[] {

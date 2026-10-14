@@ -115,16 +115,33 @@ describe("hash", () => {
 });
 
 describe("privacy-scan", () => {
-  it("flags GPS and serials as high with a clean suggestion", async () => {
+  it("flags location as critical and serials as high with a clean suggestion", async () => {
     const fixtures = await ensurePhase3Fixtures();
     const read = await readFileGrouped(fixtures.camera, false);
     const result = await privacyScan(fixtures.camera, read.groups);
     const byCategory = new Map(
       result.findings.map((finding) => [finding.category, finding.severity]),
     );
-    expect(byCategory.get("gps")).toBe("high");
+    expect(byCategory.get("gps")).toBe("critical");
     expect(byCategory.get("serial")).toBe("high");
     expect(result.suggestedCommand).toContain("metascope clean");
+  });
+
+  it("never reports ICC profile strings as owner findings", async () => {
+    const groups = {
+      ICC_Profile: {
+        ProfileCopyright: "Google Inc. 2016",
+        ProfileDescription: "sRGB",
+      },
+      JFIF: { JFIFVersion: "1.01" },
+      File: { FileType: "JPEG" },
+    };
+    const result = await privacyScan("plain-srgb.jpg", groups);
+    const highs = result.findings.filter(
+      (finding) => finding.severity === "critical" || finding.severity === "high",
+    );
+    expect(highs).toHaveLength(0);
+    expect(result.findings.map((finding) => finding.category)).toContain("icc");
   });
 });
 

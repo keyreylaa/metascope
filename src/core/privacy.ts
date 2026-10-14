@@ -1,7 +1,8 @@
+import { collectLocationEntries } from "./location.js";
 import { extractThumbnails } from "./thumbnail.js";
 import { getExifTool } from "./exiftool.js";
 
-export type Severity = "high" | "medium" | "low";
+export type Severity = "critical" | "high" | "medium" | "low" | "info";
 
 export interface PrivacyFinding {
   category: string;
@@ -15,18 +16,43 @@ export interface PrivacyResult {
   suggestedCommand: string;
 }
 
+// Owner findings come ONLY from person/creator tags (exact names,
+// verified against https://exiftool.org/TagNames/EXIF.html,
+// IPTC.html, XMP.html). ICC color-profile strings such as
+// ICC_Profile:ProfileCopyright ("Google Inc. 2016") describe the
+// profile maker, never the photo owner, so the ICC_Profile group is
+// skipped here and reported as info instead.
+const OWNER_TAGS = new Set(
+  [
+    "artist",
+    "copyright",
+    "copyrightnotice",
+    "by-line",
+    "bylinetitle",
+    "creator",
+    "rights",
+    "owner",
+    "ownername",
+    "cameraownername",
+    "credit",
+    "contact",
+    "source",
+  ].map((tag) => tag.toLowerCase()),
+);
+
+const SKIP_GROUPS = new Set(["icc_profile", "file", "exiftool"]);
+
 function valuesOf(
   groups: Record<string, Record<string, unknown>>,
-  test: RegExp,
-  skipGroups: RegExp = /$^/,
+  test: (group: string, tag: string) => boolean,
 ): string[] {
   const out: string[] = [];
   for (const [group, tags] of Object.entries(groups)) {
-    if (skipGroups.test(group)) {
+    if (SKIP_GROUPS.has(group.toLowerCase())) {
       continue;
     }
-    for (const [tag, value] of Object.entries(tags)) {
-      if (test.test(`${group}:${tag}`)) {
+    for (const [tag, value] of Object.entries(tags ?? {})) {
+      if (test(group, tag)) {
         const text = typeof value === "string" ? value : JSON.stringify(value);
         if (text && text.trim().length > 0) {
           out.push(`${group}:${tag}=${text.slice(0, 120)}`);
@@ -37,7 +63,7 @@ function valuesOf(
   return out;
 }
 
-async function thumbnailMismatch(
+async function thumbnailFinding(
   file: string,
   groups: Record<string, Record<string, unknown>>,
 ): Promise<PrivacyFinding | null> {
@@ -63,7 +89,9 @@ async function thumbnailMismatch(
         };
       }
       const exiftool = await getExifTool();
-      const mainDates = valuesOf(groups, /datetimeoriginal|createdate|modifydate/i).join("|");
+      const mainDates = valuesOf(groups, (_group, tag) =>
+        /datetimeoriginal|createdate|modifydate/i.test(tag),
+      ).join("|");
       for (const thumb of result.extracted) {
         const tags = (await exiftool.read(thumb)) as unknown as Record<string, unknown>;
         const thumbGps = Object.keys(tags).filter((key) => /gps/i.test(key));
@@ -110,26 +138,55 @@ export async function privacyScan(
     }
   };
 
-  push("gps", "high", valuesOf(groups, /gps(latitude|longitude|position|altitude)/i));
-  push("serial", "high", valuesOf(groups, /serial/i));
+  push(
+    "gps",
+    "critical",
+    collectLocationEntries(groups).map((entry) => `${entry.tag}=${entry.value}`),
+  );
+  push(
+    "serial",
+    "high",
+    valuesOf(groups, (_group, tag) => /serial/i.test(tag)),
+  );
   push(
     "owner",
     "high",
-    valuesOf(groups, /artist|by-line|creator|owner|copyright(notice)?|rights/i),
+    valuesOf(groups, (_group, tag) => OWNER_TAGS.has(tag.toLowerCase())),
   );
-  push("device", "medium", valuesOf(groups, /^(EXIF|IFD0):(Make|Model|LensModel)$/i));
   push(
-    "timestamps",
+    "device",
     "medium",
     valuesOf(
       groups,
-      /datetimeoriginal|createdate|modifydate|gpsdatestamp|gpstimestamp/i,
-      /^file$/i,
+      (group, tag) => /^(EXIF|IFD0)$/i.test(group) && /^(Make|Model|LensModel)$/.test(tag),
     ),
   );
-  push("software", "low", valuesOf(groups, /software|hostcomputer|xmptoolkit/i));
+  push(
+    "timestamps",
+    "medium",
+    valuesOf(groups, (_group, tag) =>
+      /datetimeoriginal|createdate|modifydate|gpsdatestamp|gpstimestamp/i.test(tag),
+    ),
+  );
+  push(
+    "software",
+    "low",
+    valuesOf(groups, (_group, tag) => /software|hostcomputer|xmptoolkit/i.test(tag)),
+  );
 
-  const mismatch = await thumbnailMismatch(file, groups);
+  const iccTags = Object.keys(groups["ICC_Profile"] ?? {}).filter(
+    (tag) => String(groups["ICC_Profile"]?.[tag] ?? "").trim().length > 0,
+  );
+  if (iccTags.length > 0) {
+    findings.push({
+      category: "icc",
+      severity: "info",
+      detail:
+        "ICC color profile present (color management data, not owner info; kept unless clean runs without --keep icc).",
+    });
+  }
+
+  const mismatch = await thumbnailFinding(file, groups);
   if (mismatch) {
     findings.push(mismatch);
   }

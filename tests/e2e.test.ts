@@ -62,6 +62,38 @@ describe("cli e2e: batch strip --dry-run", () => {
   });
 });
 
+describe("cli e2e: clean --rename random", () => {
+  it("prints the notice, randomizes the name, and resets timestamps", async () => {
+    const dir = testTmp("e2e-clean");
+    const outDir = testTmp("e2e-clean-out");
+    await rm(dir, { recursive: true, force: true });
+    await rm(outDir, { recursive: true, force: true });
+    await mkdir(dir, { recursive: true });
+    await paintJpeg(join(dir, "named.jpg"));
+    const { stdout } = await runCli([
+      "clean",
+      join(dir, "named.jpg"),
+      "--rename",
+      "random",
+      "--out",
+      outDir,
+    ]);
+    expect(stdout).toContain("Metadata dibersihkan.");
+    expect(stdout).toContain("Verify: clean");
+    const outputs = await readdir(outDir);
+    expect(outputs.some((entry) => /^clean-[0-9a-f]{16}\.jpg$/.test(entry))).toBe(true);
+    expect(outputs.some((entry) => entry.includes("named"))).toBe(false);
+    const { stat } = await import("node:fs/promises");
+    const info = await stat(
+      join(
+        outDir,
+        outputs.find((entry) => entry.startsWith("clean-"))!,
+      ),
+    );
+    expect(Date.now() - info.mtimeMs).toBeLessThan(120000);
+  });
+});
+
 describe("cli e2e: watch", () => {
   it("scans a dropped file and writes a sidecar", async () => {
     const dir = testTmp("e2e-watch");

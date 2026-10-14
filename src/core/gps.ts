@@ -1,5 +1,12 @@
 import { applyTags } from "./write.js";
 import { readFileGrouped } from "./reader.js";
+import {
+  collectLocationEntries,
+  decimalCoordinates,
+  LOCATION_REMOVE_TAGS,
+  mapsLink,
+  type LocationEntry,
+} from "./location.js";
 
 export function parseLatLon(text: string): { lat: number; lon: number } {
   const parts = text.split(",");
@@ -44,19 +51,32 @@ const GPS_REMOVE_TAGS: Record<string, null> = {
   GPSPosition: null,
 };
 
+export interface LocationShow {
+  entries: LocationEntry[];
+  lat: number | null;
+  lon: number | null;
+  mapsLink: string | null;
+}
+
+// Fully offline: reads local metadata only, prints a Google Maps link as
+// text. Never performs geocoding requests.
+export async function showLocation(file: string): Promise<LocationShow> {
+  const read = await readFileGrouped(file, false);
+  const entries = collectLocationEntries(read.groups);
+  const coords = decimalCoordinates(read.groups);
+  return {
+    entries,
+    lat: coords?.lat ?? null,
+    lon: coords?.lon ?? null,
+    mapsLink: coords ? mapsLink(coords.lat, coords.lon) : null,
+  };
+}
+
 export async function removeGps(
   output: string,
 ): Promise<{ removed: string[]; residual: string[] }> {
-  const { written } = await applyTags(output, GPS_REMOVE_TAGS);
+  const { written } = await applyTags(output, { ...GPS_REMOVE_TAGS, ...LOCATION_REMOVE_TAGS });
   const read = await readFileGrouped(output, false);
-  const residual = Object.keys(read.groups)
-    .filter((group) => group.toLowerCase() === "gps")
-    .flatMap((group) => Object.keys(read.groups[group] ?? {}).map((tag) => `${group}:${tag}`));
-  const compositeGps = Object.keys(read.groups["Composite"] ?? {}).filter((tag) =>
-    /gps/i.test(tag),
-  );
-  return {
-    removed: written,
-    residual: [...residual, ...compositeGps.map((tag) => `Composite:${tag}`)],
-  };
+  const residual = collectLocationEntries(read.groups).map((entry) => entry.tag);
+  return { removed: written, residual };
 }

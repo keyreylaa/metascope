@@ -78,6 +78,10 @@ export function registerScanCommand(program: Command): void {
     .option("--out <dir>", "report directory")
     .option("--zip", "bundle the report directory into one zip archive", false)
     .option("--format <list>", "comma list: json|md|csv|html", "json,md")
+    .addHelpText(
+      "before",
+      "Scan runs everything in one read-only command (metadata + privacy + AI + hashes). It never modifies inputs; reports go to --out.",
+    )
     .action(
       async (
         paths: string[],

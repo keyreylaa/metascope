@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-import { Command } from "commander";
+import { Command, Help } from "commander";
 import { closeExifTool } from "../core/exiftool.js";
+import { renderTopHelp } from "../core/help.js";
 import { registerAiCheckCommand } from "./aiCheck.js";
 import { registerBatchCommand } from "./batch.js";
 import { registerBotCommand } from "./bot.js";
@@ -9,6 +10,7 @@ import { registerCopyrightCommand } from "./copyright.js";
 import { registerDatesCommand } from "./dates.js";
 import { registerGpsCommand } from "./gps.js";
 import { registerHashCommand } from "./hash.js";
+import { registerHelpCommand } from "./help.js";
 import { registerPrivacyScanCommand } from "./privacyScan.js";
 import { registerReadCommand } from "./read.js";
 import { registerScanCommand } from "./scan.js";
@@ -20,6 +22,14 @@ import { registerWriteCommand } from "./write.js";
 export function buildProgram(): Command {
   const program = new Command();
   program.name("metascope").description("Photo/video metadata toolkit").version("0.1.0");
+  program.configureHelp({
+    formatHelp: (cmd, helper) => {
+      if (cmd === program) {
+        return renderTopHelp();
+      }
+      return Help.prototype.formatHelp.call(helper, cmd, helper);
+    },
+  });
   registerReadCommand(program);
   registerWriteCommand(program);
   registerCopyrightCommand(program);
@@ -35,6 +45,7 @@ export function buildProgram(): Command {
   registerBatchCommand(program);
   registerWatchCommand(program);
   registerBotCommand(program);
+  registerHelpCommand(program);
   return program;
 }
 

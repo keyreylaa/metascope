@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import { aiCheck, AI_DISCLAIMER } from "../core/aiCheck.js";
@@ -8,7 +8,9 @@ import { readFileGrouped } from "../core/reader.js";
 import { renderJson, renderMarkdown, summarize } from "../core/report.js";
 import { scanBuffer } from "../core/scan.js";
 import { prepareOutput } from "../core/fileOps.js";
-import { stripFile } from "../core/strip.js";
+import { removeGps } from "../core/gps.js";
+import { privacyScan } from "../core/privacy.js";
+import { CLEAN_NOTICE, detectProvenance, stripFile } from "../core/strip.js";
 import { applyTags } from "../core/write.js";
 import { TOOL_VERSION } from "../core/snapshot.js";
 
@@ -180,6 +182,82 @@ export async function runEdit(
         written.map((tag) => `ok: ${tag}`).join("\n") +
         notWritten.map((entry) => `skip: ${entry.tag} (${entry.reason ?? "?"})`).join("\n"),
       paths: [target.output],
+    };
+  });
+}
+
+export async function runPrivacy(buffer: Buffer, filename: string): Promise<RunResult> {
+  return withTempFile(buffer, filename, async (input) => {
+    const read = await readFileGrouped(input, false);
+    const result = await privacyScan(input, read.groups);
+    const counts = new Map<string, number>();
+    for (const finding of result.findings) {
+      const key = `${finding.severity}/${finding.category}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    const summary =
+      [...counts.entries()].map(([key, count]) => `${key}=${count}`).join(", ") || "no findings";
+    return {
+      channelText: `Privacy scan for ${filename}: ${summary}. Full report sent privately.`,
+      dmText:
+        `Privacy scan for ${filename}:\n` +
+        (result.findings
+          .map((finding) => `[${finding.severity}] ${finding.category}: ${finding.detail}`)
+          .join("\n") || "No privacy findings.") +
+        `\nSuggested: ${result.suggestedCommand}`,
+      paths: [],
+    };
+  });
+}
+
+export async function runClean(
+  buffer: Buffer,
+  filename: string,
+  confirmed: boolean,
+): Promise<RunResult> {
+  return withTempFile(buffer, filename, async (input, dir) => {
+    const read = await readFileGrouped(input, false);
+    const provenance = detectProvenance(read);
+    if (provenance.length > 0 && confirmed !== true) {
+      throw new Error(
+        `Refusing to remove C2PA/AI provenance (${provenance.slice(0, 5).join(", ")}). Confirm first.`,
+      );
+    }
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    const target = await prepareOutput(input, outDir, undefined, false, "_clean");
+    const result = await stripFile(target.output, { mode: "all", verify: true, yes: true });
+    const now = new Date();
+    await utimes(target.output, now, now);
+    const verdict =
+      result.residuals.length === 0
+        ? "verified clean"
+        : `${result.residuals.length} residual(s): ${result.residuals.join(", ")}`;
+    return {
+      channelText: `Cleaned ${filename}: ${verdict}. Cleaned file attached. ${CLEAN_NOTICE}`,
+      dmText: `Cleaned ${filename}: ${verdict}.`,
+      paths: [target.output],
+    };
+  });
+}
+
+export async function runGpsRemove(buffer: Buffer, filename: string): Promise<RunResult> {
+  return withTempFile(buffer, filename, async (input, dir) => {
+    const outDir = join(dir, "out");
+    await mkdir(outDir, { recursive: true });
+    const target = await prepareOutput(input, outDir, undefined, false, "_edited");
+    const result = await removeGps(target.output);
+    const verdict =
+      result.residual.length === 0
+        ? "no location fields remain (verified on re-read)"
+        : `residual: ${result.residual.join(", ")}`;
+    return {
+      channelText: `GPS removed for ${filename}: ${result.removed.length} tag(s) cleared, ${verdict}.`,
+      dmText:
+        `GPS removed for ${filename}:\n` +
+        `cleared: ${result.removed.join(", ") || "(none)"}\n` +
+        `residual: ${result.residual.join(", ") || "(none)"}`,
+      paths: [],
     };
   });
 }

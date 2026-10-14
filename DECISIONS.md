@@ -185,6 +185,53 @@ Log for ambiguous choices. Safest default wins. No user interrogation.
 - README is the canonical overview; `docs/FORMAT_MATRIX.md` stays as
   the generated reference. `--help` audited for all 15 commands.
 
+## 2026-10-14 (privacy severity fix + GPS coverage + max-privacy clean + help truth + Discord parity design)
+
+- ICC false positive fixed: `ICC_Profile:ProfileCopyright` ("Google Inc. 2016"
+  etc.) describes the color-profile maker, never the photo owner. `privacyScan`
+  now skips the whole `ICC_Profile` group for owner matching and reports ICC
+  presence as a single `info` finding instead. Owner findings come only from an
+  explicit tag-name allowlist (Artist, Copyright, CopyrightNotice, By-line,
+  By-lineTitle, Creator, Rights, Owner, OwnerName, CameraOwnerName, Credit,
+  Contact, Source), verified against exiftool.org TagNames EXIF/IPTC/XMP pages.
+  Severity rubric documented in `docs/SEVERITY.md`: gps=critical, serial/owner=high,
+  device/timestamps/thumbnail-mismatch=medium, software=low, icc=info.
+- GPS coverage is now explicit and complete: new `src/core/location.ts` holds
+  every known location tag (EXIF GPS IFD incl. Refs, XMP GPS + all
+  LocationCreated*/LocationShown* fields, IPTC City/Sub-location/Province-State/
+  Country-PrimaryLocationCode-Name, QuickTime GPSCoordinates + Location* tags)
+  plus MakerNotes freeform coordinate-pair detection. `gps --show` prints all
+  location fields + decimal coords + a Google Maps link as text only (fully
+  offline, never fetched); `gps --remove` and `clean` delete the whole list and
+  re-read to prove zero remain. QuickTime has no ISO-6709 tag in the ExifTool
+  docs (checked live) — covered via GPSCoordinates + Location* tags.
+- `clean` is now maximum-privacy: strips ICC too (unless `--keep icc`),
+  still removes PNG text chunks/trailing data/JUMBF via deleteAllTags (proven
+  live on PNG: IHDR,IDAT,IEND only + 0 trailing bytes), always verifies and
+  prints "clean" only on proven-zero residuals, resets mtime/atime to now,
+  supports `--rename random` (random id filename), requires `--yes` when
+  C2PA/AI provenance is detected (new `assertCleanConfirmed` shared by CLI and
+  `runClean`), and always prints the Indonesian pixel-watermark notice. No
+  pixel-level watermark removal implemented, per scope ban.
+- Help is a single source of truth: new `src/core/help.ts` (`COMMAND_HELP`,
+  `renderTopHelp`, `renderCommandHelp`) drives `ms --help` (grouped Analyze /
+  Modify / Batch, 2 examples per command) and `ms help <command>`; `scan --help`
+  states read-only explicitly. Discord `!help` design (Phase 5) renders from
+  the same module so wording can never drift.
+- Discord parity designed now, wired later: `runPrivacy`, `runClean(buffer,
+name, confirmed)`, `runGpsRemove` added to `src/discord/runner.ts` reusing
+  the exact core functions; channel text is redacted (counts/verdicts only),
+  full detail stays in dmText; `runClean` throws until confirmed. Spec in
+  `docs/DISCORD_PARITY.md` (map, reply rules, !help embed spec, Message Content
+  intent steps — already implemented in `src/discord/bot.ts`).
+- Two test bugs caught by the new tests, both fixed: `firstNumber` treated
+  missing tags as 0 via `Number("")` (now NaN-guarded); ICC `info` finding used
+  `valuesOf`, which skips ICC_Profile by design (now reads the group directly).
+- Live-probe notes: synthetic-minimal-ICC writes never parsed (ICC_Profile keys
+  absent), so no live ICC-strip fixture exists — ICC deletion rests on the
+  documented `deleteAllTags` behavior, claimed as unproven; `deleteAllTags`
+  on PNG provably removes text chunks + trailing junk.
+
 ## 2026-10-14 (test harness: parallel-run collision fix)
 
 - Two overlapping `npm test` runs shared deterministic `test-tmp/<name>`

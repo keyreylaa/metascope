@@ -36,6 +36,7 @@ export const copyrightOptionsSchema = outputOptionsSchema.extend({
 export const gpsOptionsSchema = outputOptionsSchema.extend({
   set: z.string().min(1).optional(),
   remove: z.boolean(),
+  show: z.boolean(),
 });
 
 export const datesOptionsSchema = outputOptionsSchema.extend({
