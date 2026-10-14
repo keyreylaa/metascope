@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+test-tmp/
+.metasyncope/
+.metascope/
+*.thumb.jpg
+*.preview.jpg
+*.tgz
+.env
