@@ -1,4 +1,5 @@
 # metascope
+![CI](https://github.com/keyreylaa/metascope/actions/workflows/ci.yml/badge.svg)
 
 Photo/video metadata toolkit: read everything accurately, edit safely, strip
 verifiably, detect AI-generation provenance, and scan whole folders. The
