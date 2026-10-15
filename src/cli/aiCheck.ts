@@ -9,10 +9,12 @@ export function registerAiCheckCommand(program: Command): void {
     .description("Layered AI-generation provenance check (metadata + optional ML)")
     .argument("<file>", "image file")
     .option("--no-ml", "skip ML pixel classifier")
-    .action(async (file: string, options: { noMl?: boolean }) => {
+    // Note: commander maps --no-ml to options.ml === false (negated option),
+    // not options.noMl. See https://github.com/tj/commander.js#other-option-types
+    .action(async (file: string, options: { ml?: boolean }) => {
       const read = await readFileGrouped(file, false);
       const detectors = getDefaultDetectors();
-      if (!options.noMl) {
+      if (options.ml !== false) {
         detectors.push(mlPixelDetector);
       }
       const result = await aiCheck(file, read.groups, detectors);

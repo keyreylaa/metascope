@@ -53,22 +53,30 @@ Continue metascope development from Phase 3 (AI detection + scan/hash/global) to
 10. Updated `docs/DISCORD_PARITY.md` — added privacy-scan to slash command map
 11. **Fixed vitest SIGILL on ARM64**: Removed ML detector from core library import chain; CLI/Discord explicitly import and pass `mlPixelDetector` via `extraDetectors` parameter. Added `vite.config.ts` with SSR external config.
 12. Added `@huggingface/transformers@3.8.0` to package.json and ran `npm install`
+13. **Fixed `ms models install` SIGILL**: download now direct HTTP via `fetch` from HF Hub (no transformers import); removed inference smoke test, replaced with file-size check + SHA256 verify. Model 55.7 MB downloaded and SHA256-verified OK.
+14. **Fixed `mlPixel` load order**: model-existence check now runs BEFORE importing transformers (native SIGILL is uncatchable, so never import when no model exists)
+15. **Fixed commander `--no-*` flag bug**: `--no-ml`/`--no-hash` map to `options.ml/hash === false`, not `options.noMl/noHash` — flags never worked before. Fixed in `aiCheck.ts`, `scan.ts`, `watch.ts` (this also fixes pre-existing `--no-hash` no-op)
 
 ## Exact Verification Results
 
-- **Typecheck**: ✅ `tsc --noEmit` passes (2026-10-14)
-- **Lint**: ✅ `eslint . && prettier --check .` passes (2026-10-14)
-- **Tests**: ✅ 66/66 pass, 0 failures (2026-10-14)
-- **Build**: ⏳ pending
-- **Manual smoke**: Not performed
+- **Typecheck**: ✅ `tsc --noEmit` passes (2026-10-15)
+- **Lint**: ✅ `eslint . && prettier --check .` passes (2026-10-15)
+- **Tests**: ✅ 66/66 pass, 0 failures (2026-10-15)
+- **Build**: ✅ `tsc` + `npm link` OK, global `ms` works (2026-10-15)
+- **Manual smoke** (2026-10-15):
+  - `ms models install` → download 55.7 MB + SHA256 verified OK, exit 0
+  - `ms models list` → shows installed model, exit 0
+  - `ms ai-check <png> --no-ml` (model installed) → exit 0, no crash
+  - `ms scan <dir> --no-ml --format json` → exit 0, report written
+  - `ms ai-check <png>` (model installed, ML enabled) → SIGILL exit 132 (expected: native crash, uncatchable)
 
-> Gates 3/3 passed. Ready for manual smoke test.
+> Gates 3/3 passed + smoke partial (ML-off paths OK).
 
 ## Blockers
 
-- Model download untested (requires network + ~58 MB)
-- ML inference path untested end-to-end
+- ML inference UNSUPPORTED on this host: bare `import('@huggingface/transformers')` → SIGILL exit 132 (onnxruntime-node@1.21.0 native build incompatible with this ARM64 CPU). Try/catch cannot catch native crashes. Use `--no-ml` here.
 - No test fixtures for ML detector
+- Inference path still untested on a compatible host
 
 ## Changed Paths
 
@@ -88,6 +96,14 @@ M docs/DISCORD_PARITY.md            (+ privacy-scan in slash map)
 A src/core/detectors/mlPixel.ts     (NEW: ML pixel detector)
 A src/cli/models.ts                 (NEW: models CLI command)
 A vite.config.ts                    (NEW: SSR external for mlPixelDetector)
+
+Uncommitted (post-dcbb344):
+M src/cli/aiCheck.ts                (commander --no-ml mapping fix)
+M src/cli/models.ts                 (HTTP direct download, no transformers import)
+M src/cli/scan.ts                   (commander --no-ml/--no-hash mapping fix)
+M src/cli/watch.ts                  (commander --no-hash mapping fix)
+M src/core/detectors/mlPixel.ts     (model check before transformers import)
+M vite.config.ts                    (removed invalid deps/ssr keys)
 ```
 
 ## Next Actions (Ordered)
@@ -109,7 +125,7 @@ A vite.config.ts                    (NEW: SSR external for mlPixelDetector)
 
 | Risk                                                   | Likelihood | Impact                                         | Mitigation                                             |
 | ------------------------------------------------------ | ---------- | ---------------------------------------------- | ------------------------------------------------------ |
-| Transformers fails to load on some ARM64/Termux hosts  | Medium     | ML detector returns `weak` evidence (graceful) | Already handled: try/catch → `weak` signal             |
+| Transformers fails to load on some ARM64/Termux hosts  | Medium     | ML detector returns `weak` evidence (graceful) | JS errors handled: try/catch → `weak` signal; NATIVE SIGILL (onnxruntime-node@1.21.0, confirmed exit 132 on this host) is uncatchable → use `--no-ml`; consider onnxruntime-web (wasm) as future fallback |
 | Model download fails (network/HF rate limit)           | Low        | `install` command errors, user retries         | Interactive confirm + cleanup on failure               |
 | False positives/negatives on compressed/resized images | High       | Evidence marked `possible` with disclaimer     | Already in detector details text                       |
 | Test parallelism collides with model cache             | Low        | Flaky tests                                    | Fixture isolation already fixed (run-<pid> namespaces) |

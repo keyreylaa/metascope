@@ -91,8 +91,8 @@ export function registerScanCommand(program: Command): void {
           depth?: string;
           ext?: string;
           followSymlinks: boolean;
-          noHash: boolean;
-          noMl: boolean;
+          hash: boolean;
+          ml: boolean;
           concurrency?: string;
           out?: string;
           zip: boolean;
@@ -100,12 +100,14 @@ export function registerScanCommand(program: Command): void {
         },
       ) => {
         const config = await getConfig();
+        // Note: commander maps --no-hash/--no-ml to options.hash/ml === false
+        // (negated options), not options.noHash/noMl.
         const parsed = scanOptionsSchema.safeParse({
           depth: options.depth === undefined ? undefined : Number(options.depth),
           ext: options.ext,
           followSymlinks: options.followSymlinks === true,
-          noHash: options.noHash === true,
-          noML: options.noMl === true,
+          noHash: options.hash === false,
+          noML: options.ml === false,
           concurrency: options.concurrency === undefined ? undefined : Number(options.concurrency),
           out: options.out,
           format: options.format,

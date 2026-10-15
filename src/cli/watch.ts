@@ -24,17 +24,18 @@ export function registerWatchCommand(program: Command): void {
           depth?: string;
           ext?: string;
           followSymlinks: boolean;
-          noHash: boolean;
+          hash: boolean;
           debounceMs?: string;
           out?: string;
         },
       ) => {
         const config = await getConfig();
+        // Note: commander maps --no-hash to options.hash === false (negated option).
         const parsed = watchOptionsSchema.safeParse({
           depth: options.depth === undefined ? undefined : Number(options.depth),
           ext: options.ext,
           followSymlinks: options.followSymlinks === true,
-          noHash: options.noHash === true,
+          noHash: options.hash === false,
           concurrency: undefined,
           debounceMs: options.debounceMs === undefined ? undefined : Number(options.debounceMs),
           out: options.out,

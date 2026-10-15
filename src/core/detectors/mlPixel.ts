@@ -29,6 +29,16 @@ async function loadMLPipeline(): Promise<unknown> {
   if (mlPipeline) return mlPipeline;
   if (loadError) throw new Error(loadError);
 
+  // Check model FIRST, before touching transformers: importing
+  // @huggingface/transformers loads the onnxruntime native module, which
+  // SIGILL-crashes the whole process on hosts with incompatible builds.
+  // A native crash cannot be caught, so never import it when no model exists.
+  const modelPath = await getModelPath();
+  if (!modelPath) {
+    loadError = "Model not installed. Run: ms models install";
+    throw new Error(loadError);
+  }
+
   let transformers: unknown;
   try {
     transformers = await import("@huggingface/transformers");
@@ -42,12 +52,6 @@ async function loadMLPipeline(): Promise<unknown> {
       pipeline: (task: string, model: string, options: { device: string }) => Promise<unknown>;
       env: { localModelPath: string; allowRemoteModels: boolean };
     };
-    const modelPath = await getModelPath();
-
-    if (!modelPath) {
-      loadError = "Model not installed. Run: ms models install";
-      throw new Error(loadError);
-    }
 
     env.localModelPath = join(modelPath, "..", "..");
     env.allowRemoteModels = false;
