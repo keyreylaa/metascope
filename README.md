@@ -89,27 +89,58 @@ metascope batch strip ./photos --out ./out --dry-run
 
 ## Commands
 
-| Command                                    | What it does                                                                                                                                                                |
-| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `read <files\|globs>`                      | Dump metadata grouped by namespace (`--format table\|json\|md`, `--raw`, `--thumbnail`)                                                                                     |
-| `write <file>` (`edit` alias)              | Set tags (`--set TAG=VALUE`, `--from-json`, `--copy-from`); reports every tag NOT written with the reason                                                                   |
-| `copyright <file>`                         | Set owner/notice/URL/usage-terms (`--sync` mirrors across EXIF, IPTC, XMP)                                                                                                  |
-| `gps <file>`                               | `--set lat,lon` or `--remove`                                                                                                                                               |
-| `dates <file>`                             | `--set "YYYY:mm:dd HH:MM:SS"` or `--shift <seconds>`                                                                                                                        |
-| `strip <files>`                            | Remove metadata, default mode `privacy` (`all\|privacy\|gps\|custom`, `--keep`, `--verify`, `--reencode`, `--zip`)                                                          |
-| `clean <files>`                            | `strip --mode all --verify` in one command                                                                                                                                  |
-| `snapshot save\|list\|show\|restore\|diff` | Full-metadata JSON snapshots in the XDG data dir                                                                                                                            |
-| `hash <file>`                              | File, pixel, and perceptual hashes (`--compare`); integrity/duplicates only, NOT AI detection                                                                               |
-| `ai-check <file>`                          | Layered AI-generation provenance check (metadata only)                                                                                                                      |
-| `privacy-scan <files>`                     | Privacy risk report with severity per finding                                                                                                                               |
-| `scan [paths...]`                          | Read-only folder scan: metadata, privacy, AI, hashes (`--depth`, `--ext`, `--follow-symlinks`, `--no-hash`, `--concurrency`, `--out`, `--format json,md,csv,html`, `--zip`) |
-| `batch strip\|write <inputs...>`           | Bulk runs with concurrency pool (`--dry-run`, `--concurrency`, `--ext`, `--out`, `--zip`)                                                                                   |
-| `watch <dirs...>`                          | Auto-scan new/changed files, per-file JSON sidecars (`--depth`, `--ext`, `--debounce-ms`, `--out`)                                                                          |
-| `bot`                                      | Start the Discord bot (`--prefix`, `--max-file-mb`; needs `DISCORD_TOKEN`)                                                                                                  |
+| Command                                    | What it does                                                                                                                                                                           |
+| ------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `read <files\|globs>`                      | Dump metadata grouped by namespace (`--format table\|json\|md`, `--raw`, `--thumbnail`)                                                                                                |
+| `write <file>` (`edit` alias)              | Set tags (`--set TAG=VALUE`, `--from-json`, `--copy-from`); reports every tag NOT written with the reason                                                                              |
+| `copyright <file>`                         | Set owner/notice/URL/usage-terms (`--sync` mirrors across EXIF, IPTC, XMP)                                                                                                             |
+| `gps <file>`                               | `--show`, `--set lat,lon`, or `--remove`                                                                                                                                               |
+| `dates <file>`                             | `--set "YYYY:mm:dd HH:MM:SS"` or `--shift <seconds>`                                                                                                                                   |
+| `strip <files>`                            | Remove metadata, default mode `privacy` (`all\|privacy\|gps\|custom`, `--keep`, `--verify`, `--reencode`, `--zip`)                                                                     |
+| `clean <files>`                            | `strip --mode all --verify` in one command                                                                                                                                             |
+| `snapshot save\|list\|show\|restore\|diff` | Full-metadata JSON snapshots in the XDG data dir                                                                                                                                       |
+| `hash <file>`                              | File, pixel, and perceptual hashes (`--compare`); integrity/duplicates only, NOT AI detection                                                                                          |
+| `ai-check <file>`                          | Layered AI-generation provenance check: metadata plus the optional ML pixel classifier (`--no-ml` skips it)                                                                            |
+| `privacy-scan <files>`                     | Privacy risk report with severity per finding                                                                                                                                          |
+| `scan [paths...]`                          | Read-only folder scan: metadata, privacy, AI, hashes (`--depth`, `--ext`, `--follow-symlinks`, `--no-hash`, `--no-ml`, `--concurrency`, `--out`, `--format json,md,csv,html`, `--zip`) |
+| `batch strip\|write <inputs...>`           | Bulk runs with concurrency pool (`--dry-run`, `--concurrency`, `--ext`, `--out`, `--zip`)                                                                                              |
+| `watch <dirs...>`                          | Auto-scan new/changed files, per-file JSON sidecars (`--depth`, `--ext`, `--no-hash`, `--debounce-ms`, `--out`)                                                                        |
+| `models install\|list\|remove\|verify`     | Manage the optional ML pixel-classifier model (downloaded on demand, never bundled)                                                                                                    |
+| `bot`                                      | Start the Discord bot (`--prefix`, `--max-file-mb`; needs `DISCORD_TOKEN`)                                                                                                             |
+| `help [command]`                           | Show grouped help or detail for one command                                                                                                                                            |
 
 `ai-check` verdicts are `confirmed_by_metadata | likely | possible |
 no_evidence`, always with the evidence list and the disclaimer that missing
 metadata proves nothing and offline tools cannot see invisible watermarks.
+
+## AI pixel classifier (optional ML)
+
+`ai-check` and `scan` use metadata detectors by default. An extra ONNX
+pixel classifier (`ml-pixel-classifier`) can add pixel-level evidence:
+
+```sh
+ms models install   # one-time ~56 MB download from Hugging Face, SHA256-verified
+ms ai-check photo.jpg
+ms ai-check photo.jpg --no-ml   # metadata detectors only
+ms scan ./photos --no-ml
+```
+
+- Model: `onnx-community/ai-image-detect-distilled-ONNX` (MIT), stored
+  outside scanned folders in the XDG data dir
+  (`~/.local/share/metascope/models/`, honors `XDG_DATA_HOME`).
+- The model file is never bundled with the repo; `ms models install`
+  asks for confirmation before downloading.
+- ML evidence is capped at `possible` — it is a statistical estimate
+  with false positives/negatives, never proof. `confirmed_by_metadata`
+  comes only from provenance metadata (C2PA, DigitalSourceType,
+  generator parameters).
+- If the model is missing, `ai-check` still works and reports
+  `ML detector tidak aktif` instead of failing.
+- The ML runtime (`onnxruntime-native` via `@huggingface/transformers`)
+  needs a compatible CPU build. If it crashes on your host (observed as
+  `Illegal instruction`/SIGILL on some ARM64 builds), use `--no-ml` —
+  every metadata path keeps working. A native crash cannot be caught,
+  so the detector is strictly opt-in at runtime.
 
 ## Config and environment
 
@@ -141,13 +172,17 @@ Setup: Discord Developer Portal → your application → Bot → enable
 need it; without it the bot explains this and exits). Invite with the
 `applications.commands` scope for `/meta` slash commands.
 
-- Slash `/meta read|strip|ai-check|hash|scan` (attachment input) reply
-  ephemeral by default; full JSON comes back as a file. There is no
-  `/meta edit` — freeform tags are clunky as slash options, prefix `!edit`
-  covers it.
+- Slash `/meta read|strip|ai-check|hash|scan|privacy-scan` (attachment
+  input) reply ephemeral by default; full JSON comes back as a file. There
+  is no `/meta edit` — freeform tags are clunky as slash options, prefix
+  `!edit` covers it. `/meta ai-check` and `/meta scan` include the ML
+  pixel classifier when its model is installed (see above).
 - Prefix (default `!`): `!scan !read !ai !hash !strip !edit KEY=VALUE !help`,
   plus `!autoscan on|off` (needs Manage Channels). Works on attachments in
   the same message or the replied-to message, max 3 attachments per command.
+  (The command map in [docs/DISCORD_PARITY.md](docs/DISCORD_PARITY.md)
+  tracks planned prefix/slash coverage; `!privacy`, `!clean`, and
+  `!gps remove` there are not wired in the bot yet.)
 - In-channel prefix replies are redacted (verdicts/flags only — no GPS,
   serials, or owner names); the full report goes to your DM, or a
   redacted-only notice if DMs are closed.
@@ -182,6 +217,10 @@ and [DECISIONS.md](DECISIONS.md) (decision log); security practices in
 
 ## Limitations
 
+- The ML pixel classifier needs a compatible `onnxruntime-native` build;
+  on some ARM64 hosts it crashes the process (`Illegal instruction`) and
+  `--no-ml` is then required. Model download, verification, and all
+  metadata paths are unaffected.
 - No C2PA-signed fixture exists (needs a real signer), so manifest
   removal/validation paths are implemented but unproven end to end.
 - Synthetic fixtures cannot carry real MakerNotes or camera thumbnails.
@@ -192,5 +231,4 @@ and [DECISIONS.md](DECISIONS.md) (decision log); security practices in
 
 ## License
 
-`package.json` declares MIT, but no `LICENSE` file ships in the repo yet —
-add one with the copyright holder before publishing.
+MIT — see [LICENSE](LICENSE).

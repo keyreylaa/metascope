@@ -36,8 +36,8 @@ export const COMMAND_HELP: CommandHelp[] = [
   {
     name: "ai-check",
     group: "Analyze",
-    oneLiner: "Layered AI-generation provenance check (metadata only).",
-    examples: ["ms ai-check image.png", "ms ai-check video.mp4"],
+    oneLiner: "Layered AI-generation provenance check (metadata + optional ML pixel check).",
+    examples: ["ms ai-check image.png", "ms ai-check image.png --no-ml"],
     cli: "ai-check",
     prefix: "!ai",
     slash: "/meta ai-check",
@@ -58,7 +58,16 @@ export const COMMAND_HELP: CommandHelp[] = [
     examples: ["ms privacy-scan photo.jpg", "ms privacy-scan ./photos"],
     cli: "privacy-scan",
     prefix: "!privacy",
-    slash: "/meta scan",
+    slash: "/meta privacy-scan",
+  },
+  {
+    name: "models",
+    group: "Analyze",
+    oneLiner: "Download and manage the optional ML pixel-classifier model.",
+    examples: ["ms models install", "ms models list"],
+    cli: "models",
+    prefix: "(CLI only)",
+    slash: "(none)",
   },
   {
     name: "clean",

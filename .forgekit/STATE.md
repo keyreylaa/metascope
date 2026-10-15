@@ -108,10 +108,21 @@ M vite.config.ts                    (removed invalid deps/ssr keys)
 
 ## Next Actions (Ordered)
 
-1. Manual smoke test `ms models install` (requires network)
-2. Add unit test for `mlPixelDetector` (mock pipeline, verify evidence shape)
-3. Add integration test for `--no-ml` flag on `ai-check` and `scan`
-4. Consider: document ML detector limitations in README + `docs/SEVERITY.md`
+1. Add unit test for `mlPixelDetector` (mock pipeline, verify evidence shape)
+2. Add integration test for `--no-ml` flag on `ai-check` and `scan`
+3. Consider: `ai-eval` command + remote API detector (opt-in, default OFF) per original plan
+
+## Docs pass (2026-10-15, uncommitted)
+
+- README rewritten for consistency: commands table now matches `src/core/help.ts`
+  (added `models`, `help`, `--no-ml`/`--no-hash`; fixed `ai-check` row, `gps --show`);
+  new "AI pixel classifier" section (model, install, XDG path, SHA256, `possible`
+  cap, ARM64 SIGILL note); Discord slash list + `privacy-scan`; prefix list now
+  matches `prefix.ts` reality with parity-doc footnote; License section fixed
+  (LICENSE exists); Limitations += ML runtime note.
+- `src/core/help.ts`: ai-check one-liner (drop "metadata only"), privacy-scan
+  slash `/meta privacy-scan`, new `models` entry (keeps `ms help models` truthful).
+- Verified: typecheck/lint/build OK, full suite 66/66, `ms help models` smoke OK.
 
 ## Assumptions
 
@@ -123,12 +134,12 @@ M vite.config.ts                    (removed invalid deps/ssr keys)
 
 ## Risks
 
-| Risk                                                   | Likelihood | Impact                                         | Mitigation                                             |
-| ------------------------------------------------------ | ---------- | ---------------------------------------------- | ------------------------------------------------------ |
+| Risk                                                   | Likelihood | Impact                                         | Mitigation                                                                                                                                                                                                |
+| ------------------------------------------------------ | ---------- | ---------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Transformers fails to load on some ARM64/Termux hosts  | Medium     | ML detector returns `weak` evidence (graceful) | JS errors handled: try/catch → `weak` signal; NATIVE SIGILL (onnxruntime-node@1.21.0, confirmed exit 132 on this host) is uncatchable → use `--no-ml`; consider onnxruntime-web (wasm) as future fallback |
-| Model download fails (network/HF rate limit)           | Low        | `install` command errors, user retries         | Interactive confirm + cleanup on failure               |
-| False positives/negatives on compressed/resized images | High       | Evidence marked `possible` with disclaimer     | Already in detector details text                       |
-| Test parallelism collides with model cache             | Low        | Flaky tests                                    | Fixture isolation already fixed (run-<pid> namespaces) |
+| Model download fails (network/HF rate limit)           | Low        | `install` command errors, user retries         | Interactive confirm + cleanup on failure                                                                                                                                                                  |
+| False positives/negatives on compressed/resized images | High       | Evidence marked `possible` with disclaimer     | Already in detector details text                                                                                                                                                                          |
+| Test parallelism collides with model cache             | Low        | Flaky tests                                    | Fixture isolation already fixed (run-<pid> namespaces)                                                                                                                                                    |
 
 ---
 
