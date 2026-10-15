@@ -10,6 +10,7 @@ import {
   type ScanReport,
 } from "../core/report.js";
 import { scanInputs } from "../core/scan.js";
+import { mlPixelDetector } from "../core/detectors/mlPixel.js";
 import { scanOptionsSchema } from "../core/schemas.js";
 
 function parseFormats(raw: string): string[] {
@@ -74,6 +75,7 @@ export function registerScanCommand(program: Command): void {
     .option("--ext <list>", "comma-separated extensions, e.g. jpg,png")
     .option("--follow-symlinks", "follow symbolic links (off by default)", false)
     .option("--no-hash", "skip perceptual hashing for speed", false)
+    .option("--no-ml", "skip ML pixel classifier", false)
     .option("--concurrency <n>", "parallel files", String)
     .option("--out <dir>", "report directory")
     .option("--zip", "bundle the report directory into one zip archive", false)
@@ -90,6 +92,7 @@ export function registerScanCommand(program: Command): void {
           ext?: string;
           followSymlinks: boolean;
           noHash: boolean;
+          noMl: boolean;
           concurrency?: string;
           out?: string;
           zip: boolean;
@@ -102,6 +105,7 @@ export function registerScanCommand(program: Command): void {
           ext: options.ext,
           followSymlinks: options.followSymlinks === true,
           noHash: options.noHash === true,
+          noML: options.noMl === true,
           concurrency: options.concurrency === undefined ? undefined : Number(options.concurrency),
           out: options.out,
           format: options.format,
@@ -117,24 +121,30 @@ export function registerScanCommand(program: Command): void {
           process.exitCode = 1;
           return;
         }
-        const report = await scanInputs(paths, {
-          depth: parsed.data.depth,
-          ext: parsed.data.ext ? parsed.data.ext.split(",") : undefined,
-          followSymlinks: parsed.data.followSymlinks,
-          noHash: parsed.data.noHash,
-          concurrency: effectiveConcurrency(parsed.data.concurrency, config),
-          onProgress: (done, total) => {
-            const line = `Scanning ${done}/${total}`;
-            if (process.stderr.isTTY) {
-              process.stderr.write(`\r${line}`);
-              if (done === total) {
-                process.stderr.write("\n");
+        const extraDetectors = parsed.data.noML ? [] : [mlPixelDetector];
+        const report = await scanInputs(
+          paths,
+          {
+            depth: parsed.data.depth,
+            ext: parsed.data.ext ? parsed.data.ext.split(",") : undefined,
+            followSymlinks: parsed.data.followSymlinks,
+            noHash: parsed.data.noHash,
+            noML: parsed.data.noML,
+            concurrency: effectiveConcurrency(parsed.data.concurrency, config),
+            onProgress: (done, total) => {
+              const line = `Scanning ${done}/${total}`;
+              if (process.stderr.isTTY) {
+                process.stderr.write(`\r${line}`);
+                if (done === total) {
+                  process.stderr.write("\n");
+                }
+              } else if (done === 1 || done === total || done % 25 === 0) {
+                console.error(line);
               }
-            } else if (done === 1 || done === total || done % 25 === 0) {
-              console.error(line);
-            }
+            },
           },
-        });
+          extraDetectors,
+        );
         for (const file of report.files) {
           const gps = file.privacy.some((finding) => finding.category === "gps")
             ? "gps=yes"

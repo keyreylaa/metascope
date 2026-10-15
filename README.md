@@ -1,4 +1,5 @@
 # metascope
+
 ![CI](https://github.com/keyreylaa/metascope/actions/workflows/ci.yml/badge.svg)
 
 Photo/video metadata toolkit: read everything accurately, edit safely, strip
@@ -72,8 +73,6 @@ metascope batch strip ./photos --out ./out --concurrency 12 --zip
 metascope batch strip ./photos --out ./out --dry-run
 ```
 
-
-
 ## Safety rules
 
 - Originals are never touched by default. Edit/strip commands write copies
@@ -86,7 +85,7 @@ metascope batch strip ./photos --out ./out --dry-run
   "clean" is printed only when the re-read proves it.
 - Stripping metadata does NOT remove invisible pixel watermarks (e.g. SynthID).
 - The `clean` command is equivalent to `strip --mode all --verify` and follows
-   the same safety rules.
+  the same safety rules.
 
 ## Commands
 

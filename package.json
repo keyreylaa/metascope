@@ -20,6 +20,7 @@
     "start": "tsx src/cli/index.ts"
   },
   "dependencies": {
+    "@huggingface/transformers": "3.8.0",
     "adm-zip": "0.6.1",
     "commander": "15.0.0",
     "discord.js": "14.27.0",

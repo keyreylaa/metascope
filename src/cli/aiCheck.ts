@@ -1,15 +1,21 @@
 import type { Command } from "commander";
-import { aiCheck } from "../core/aiCheck.js";
+import { aiCheck, getDefaultDetectors } from "../core/aiCheck.js";
+import { mlPixelDetector } from "../core/detectors/mlPixel.js";
 import { readFileGrouped } from "../core/reader.js";
 
 export function registerAiCheckCommand(program: Command): void {
   program
     .command("ai-check")
-    .description("Layered AI-generation provenance check (metadata only)")
+    .description("Layered AI-generation provenance check (metadata + optional ML)")
     .argument("<file>", "image file")
-    .action(async (file: string) => {
+    .option("--no-ml", "skip ML pixel classifier")
+    .action(async (file: string, options: { noMl?: boolean }) => {
       const read = await readFileGrouped(file, false);
-      const result = await aiCheck(file, read.groups);
+      const detectors = getDefaultDetectors();
+      if (!options.noMl) {
+        detectors.push(mlPixelDetector);
+      }
+      const result = await aiCheck(file, read.groups, detectors);
       console.log(`File: ${result.file}`);
       console.log(`Verdict: ${result.verdict}`);
       if (result.evidence.length === 0) {

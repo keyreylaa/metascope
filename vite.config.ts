@@ -7,5 +7,12 @@ export default defineConfig({
     environment: "node",
     testTimeout: 60000,
     hookTimeout: 60000,
+    pool: "forks",
+    deps: {
+      external: ["./src/core/detectors/mlPixel.js"],
+    },
+  },
+  ssr: {
+    external: ["./src/core/detectors/mlPixel.js"],
   },
 });

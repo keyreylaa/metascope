@@ -7,18 +7,18 @@ and the future Discord `!help` all render from it.
 
 ## Command map
 
-| CLI              | Prefix            | Slash            | Core function                                         |
-| ---------------- | ----------------- | ---------------- | ----------------------------------------------------- |
-| `scan`           | `!scan`           | `/meta scan`     | `runScan` (`src/discord/runner.ts` over `scanBuffer`) |
-| `read`           | `!read`           | `/meta read`     | `runRead`                                             |
-| `ai-check`       | `!ai`             | `/meta ai-check` | `runAi`                                               |
-| `hash`           | `!hash`           | `/meta hash`     | `runHash`                                             |
-| `privacy-scan`   | `!privacy`        | `/meta scan`     | `runPrivacy`                                          |
-| `clean`          | `!clean`          | `/meta strip`    | `runClean` (needs confirm, see below)                 |
-| `strip`          | `!strip`          | `/meta strip`    | `runStrip`                                            |
-| `edit KEY=VALUE` | `!edit KEY=VALUE` | (prefix only)    | `runEdit`                                             |
-| `gps --remove`   | `!gps remove`     | (none)           | `runGpsRemove`                                        |
-| `help [cmd]`     | `!help [cmd]`     | (none)           | `renderTopHelp` / `renderCommandHelp`                 |
+| CLI              | Prefix            | Slash                | Core function                                         |
+| ---------------- | ----------------- | -------------------- | ----------------------------------------------------- |
+| `scan`           | `!scan`           | `/meta scan`         | `runScan` (`src/discord/runner.ts` over `scanBuffer`) |
+| `read`           | `!read`           | `/meta read`         | `runRead`                                             |
+| `ai-check`       | `!ai`             | `/meta ai-check`     | `runAi`                                               |
+| `hash`           | `!hash`           | `/meta hash`         | `runHash`                                             |
+| `privacy-scan`   | `!privacy`        | `/meta privacy-scan` | `runPrivacy`                                          |
+| `clean`          | `!clean`          | `/meta strip`        | `runClean` (needs confirm, see below)                 |
+| `strip`          | `!strip`          | `/meta strip`        | `runStrip`                                            |
+| `edit KEY=VALUE` | `!edit KEY=VALUE` | (prefix only)        | `runEdit`                                             |
+| `gps --remove`   | `!gps remove`     | (none)               | `runGpsRemove`                                        |
+| `help [cmd]`     | `!help [cmd]`     | (none)               | `renderTopHelp` / `renderCommandHelp`                 |
 
 `copyright`, `dates`, `snapshot`, `batch`, `watch` are CLI-only:
 freeform multi-option flows that do not map cleanly onto attachments.

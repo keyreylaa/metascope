@@ -14,6 +14,7 @@ import { registerHelpCommand } from "./help.js";
 import { registerPrivacyScanCommand } from "./privacyScan.js";
 import { registerReadCommand } from "./read.js";
 import { registerScanCommand } from "./scan.js";
+import { registerModelsCommand } from "./models.js";
 import { registerSnapshotCommand } from "./snapshot.js";
 import { registerStripCommand } from "./strip.js";
 import { registerWatchCommand } from "./watch.js";
@@ -42,6 +43,7 @@ export function buildProgram(): Command {
   registerAiCheckCommand(program);
   registerPrivacyScanCommand(program);
   registerScanCommand(program);
+  registerModelsCommand(program);
   registerBatchCommand(program);
   registerWatchCommand(program);
   registerBotCommand(program);

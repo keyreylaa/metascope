@@ -1,18 +1,18 @@
 import { mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
-import { aiCheck, AI_DISCLAIMER } from "../core/aiCheck.js";
+import { aiCheck, AI_DISCLAIMER, getDefaultDetectors } from "../core/aiCheck.js";
 import { HASH_SCOPE_NOTE, hammingDistanceHex, hashFile, similarityVerdict } from "../core/hash.js";
 import { channelSummary } from "./redact.js";
 import { readFileGrouped } from "../core/reader.js";
 import { renderJson, renderMarkdown, summarize } from "../core/report.js";
-import { scanBuffer } from "../core/scan.js";
 import { prepareOutput } from "../core/fileOps.js";
 import { removeGps } from "../core/gps.js";
 import { privacyScan } from "../core/privacy.js";
 import { CLEAN_NOTICE, detectProvenance, stripFile } from "../core/strip.js";
 import { applyTags } from "../core/write.js";
 import { TOOL_VERSION } from "../core/snapshot.js";
+import { Detector } from "../core/aiCheck.js";
 
 export interface OutFile {
   name: string;
@@ -46,8 +46,13 @@ async function withTempFile(
   }
 }
 
-export async function runScan(buffer: Buffer, filename: string): Promise<RunResult> {
-  const single = await scanBuffer(buffer, filename, {});
+export async function runScan(
+  buffer: Buffer,
+  filename: string,
+  extraDetectors: Detector[] = [],
+): Promise<RunResult> {
+  const { scanBuffer } = await import("../core/scan.js");
+  const single = await scanBuffer(buffer, filename, {}, extraDetectors);
   const report = {
     tool: "metascope",
     version: TOOL_VERSION,
@@ -120,10 +125,15 @@ export async function runHash(
   });
 }
 
-export async function runAi(buffer: Buffer, filename: string): Promise<RunResult> {
+export async function runAi(
+  buffer: Buffer,
+  filename: string,
+  extraDetectors: Detector[] = [],
+): Promise<RunResult> {
   return withTempFile(buffer, filename, async (input) => {
     const read = await readFileGrouped(input, false);
-    const result = await aiCheck(input, read.groups);
+    const detectors = [...getDefaultDetectors(), ...extraDetectors];
+    const result = await aiCheck(input, read.groups, detectors);
     const counts = new Map<string, number>();
     for (const item of result.evidence) {
       counts.set(item.confidence, (counts.get(item.confidence) ?? 0) + 1);

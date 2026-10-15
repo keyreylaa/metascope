@@ -66,6 +66,7 @@ export const scanOptionsSchema = z.object({
   ext: z.string().min(1).optional(),
   followSymlinks: z.boolean(),
   noHash: z.boolean(),
+  noML: z.boolean(),
   concurrency: z.number().int().min(1).max(32).optional(),
   out: z.string().min(1).optional(),
   format: z.string().min(1),

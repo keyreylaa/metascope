@@ -1,8 +1,9 @@
 import { mkdtemp, open, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join, resolve } from "node:path";
-import { aiCheck } from "./aiCheck.js";
+import { aiCheck, getDefaultDetectors } from "./aiCheck.js";
 import { DEFAULT_CONCURRENCY } from "./config.js";
+import { Detector } from "./aiCheck.js";
 import { getExifTool } from "./exiftool.js";
 import { hashFile } from "./hash.js";
 import { detectFormat } from "./magic.js";
@@ -14,6 +15,7 @@ import { TOOL_VERSION } from "./snapshot.js";
 
 export interface ScanFileOptions {
   noHash?: boolean;
+  noML?: boolean;
 }
 
 export interface ScanInputsOptions extends ScanFileOptions {
@@ -56,7 +58,11 @@ async function magicOf(file: string): Promise<{ format: string } | { error: stri
   }
 }
 
-export async function scanOneFile(file: string, options: ScanFileOptions): Promise<FileReport> {
+export async function scanOneFile(
+  file: string,
+  options: ScanFileOptions,
+  extraDetectors: Detector[] = [],
+): Promise<FileReport> {
   const absolute = resolve(file);
   const base: FileReport = {
     file: absolute,
@@ -130,7 +136,8 @@ export async function scanOneFile(file: string, options: ScanFileOptions): Promi
     return base;
   }
   base.privacy = (await privacyScan(absolute, groups)).findings;
-  const ai = await aiCheck(absolute, groups);
+  const detectors = [...getDefaultDetectors(), ...extraDetectors];
+  const ai = await aiCheck(absolute, groups, detectors);
   base.aiVerdict = ai.verdict;
   base.aiEvidence = ai.evidence;
   return base;
@@ -140,12 +147,13 @@ export async function scanBuffer(
   buffer: Buffer,
   filenameHint: string,
   options: ScanFileOptions,
+  extraDetectors: Detector[] = [],
 ): Promise<FileReport> {
   const dir = await mkdtemp(join(tmpdir(), "metascope-scan-"));
   const target = join(dir, basename(filenameHint) || "upload.bin");
   try {
     await writeFile(target, buffer);
-    return await scanOneFile(target, options);
+    return await scanOneFile(target, options, extraDetectors);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -154,6 +162,7 @@ export async function scanBuffer(
 export async function scanInputs(
   inputs: string[],
   options: ScanInputsOptions,
+  extraDetectors: Detector[] = [],
 ): Promise<ScanReport> {
   const roots = inputs.length > 0 ? inputs : [process.cwd()];
   const expanded = await expandScanInputs(roots, {
@@ -171,7 +180,14 @@ export async function scanInputs(
     async () => {
       while (cursor < files.length) {
         const index = cursor++;
-        results[index] = await scanOneFile(files[index]!, { noHash: options.noHash });
+        results[index] = await scanOneFile(
+          files[index]!,
+          {
+            noHash: options.noHash,
+            noML: options.noML,
+          },
+          extraDetectors,
+        );
         done += 1;
         options.onProgress?.(done, files.length);
       }

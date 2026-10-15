@@ -56,14 +56,18 @@ export function flatEntries(groups: Record<string, Record<string, unknown>>): [s
   return entries;
 }
 
-export const DEFAULT_DETECTORS: Detector[] = [
-  c2paDetector,
-  digitalSourceDetector,
-  generatorDetector,
-  vendorDetector,
-  cameraDetector,
-  weakDetector,
-];
+export function getDefaultDetectors(): Detector[] {
+  return [
+    c2paDetector,
+    digitalSourceDetector,
+    generatorDetector,
+    vendorDetector,
+    cameraDetector,
+    weakDetector,
+  ];
+}
+
+// DEFAULT_DETECTORS removed - use getDefaultDetectors() instead
 
 const LEVEL: Record<Confidence, number> = {
   confirmed: 3,
@@ -108,8 +112,11 @@ export interface AiResult {
 export async function aiCheck(
   file: string,
   groups: Record<string, Record<string, unknown>>,
-  detectors: Detector[] = DEFAULT_DETECTORS,
+  detectors?: Detector[],
 ): Promise<AiResult> {
+  if (!detectors) {
+    detectors = getDefaultDetectors();
+  }
   let pngTexts: PngText[] = [];
   if (file.toLowerCase().endsWith(".png")) {
     try {
